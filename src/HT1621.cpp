@@ -32,11 +32,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <Arduino.h>
 #include "HT1621.h"
 
+//Constructor
 HT1621::HT1621() {
     memset(_buffer, 0x00, sizeof(_buffer));
 }
 
-
+// Initialization Functions
 void HT1621::begin(int cs_p, int wr_p, int data_p, int backlight_p)
 {
 	pinMode(cs_p, OUTPUT);
@@ -63,6 +64,17 @@ void HT1621::begin(int cs_p, int wr_p, int data_p)
 	config();
 }
 
+void HT1621::config()
+{
+	wrCMD(BIAS);
+	wrCMD(RC256);
+	wrCMD(SYSDIS);
+	wrCMD(WDTDIS1);
+	wrCMD(SYSEN);
+	wrCMD(LCDON);
+}
+
+
 void HT1621::wrDATA(unsigned char data, unsigned char cnt) {
 	unsigned char i;
 	for (i = 0; i < cnt; i++) {
@@ -79,6 +91,14 @@ void HT1621::wrDATA(unsigned char data, unsigned char cnt) {
 		data <<= 1;
 	}
 }
+// Write a command to the HT1621
+void HT1621::wrCMD(unsigned char CMD) {  //100
+	digitalWrite(_cs_p, LOW);
+	wrDATA(0x80, 4);
+	wrDATA(CMD, 8);
+	digitalWrite(_cs_p, HIGH);
+}
+//
 void HT1621::wrclrdata(unsigned char addr, unsigned char sdata)
 {
 	addr <<= 2;
@@ -88,17 +108,15 @@ void HT1621::wrclrdata(unsigned char addr, unsigned char sdata)
 	wrDATA(sdata, 8);
 	digitalWrite(_cs_p, HIGH);
 }
-
-void HT1621::display()
-{
-	wrCMD(LCDON);
+void HT1621::wrCLR(unsigned char len) {
+	unsigned char addr = 0;
+	unsigned char i;
+	for (i = 0; i < len; i++) {
+		wrclrdata(addr, 0x00);
+		addr = addr + 2;
+	}
 }
-
-void HT1621::noDisplay()
-{
-	wrCMD(LCDOFF);
-}
-
+//Write One Byte to the HT1621
 void HT1621::wrone(unsigned char addr, unsigned char sdata)
 {
 	addr <<= 2;
@@ -109,67 +127,29 @@ void HT1621::wrone(unsigned char addr, unsigned char sdata)
 	digitalWrite(_cs_p, HIGH);
 }
 
-void HT1621::backlight()
+// Control functions
+//Set the display on or off
+void HT1621::display(bool state)
 {
-	if (_backlight_en)
-		digitalWrite(_backlight_p, HIGH);
-	delay(1);
-}
-
-void HT1621::noBacklight()
-{
-	if(_backlight_en)
-		digitalWrite(_backlight_p, LOW);
-	delay(1);
-}
-
-void HT1621::wrCMD(unsigned char CMD) {  //100
-	digitalWrite(_cs_p, LOW);
-	wrDATA(0x80, 4);
-	wrDATA(CMD, 8);
-	digitalWrite(_cs_p, HIGH);
-}
-
-void HT1621::config()
-{
-	wrCMD(BIAS);
-	wrCMD(RC256);
-	wrCMD(SYSDIS);
-	wrCMD(WDTDIS1);
-	wrCMD(SYSEN);
-	wrCMD(LCDON);
-}
-
-void HT1621::wrCLR(unsigned char len) {
-	unsigned char addr = 0;
-	unsigned char i;
-	for (i = 0; i < len; i++) {
-		wrclrdata(addr, 0x00);
-		addr = addr + 2;
+	if (state) {
+		wrCMD(LCDON);
+	} else {
+		wrCMD(LCDOFF);
 	}
 }
-
-void HT1621::setBatteryLevel(int level) {
-	// zero out the previous (otherwise the or couldn't be possible)
-	_buffer[0] &= 0x7F;
-	_buffer[1] &= 0x7F;
-	_buffer[2] &= 0x7F;
-
-	switch(level){
-		case 3: // battery on and all 3 segments
-			_buffer[0] |= 0x80;
-		case 2: // battery on and 2 segments
-			_buffer[1] |= 0x80;
-		case 1: // battery on and 1 segment
-			_buffer[2] |= 0x80;
-		case 0: // battery indication off
-		default:
-			break;
-	}
-
-	update();
+// Set the backlight on or off
+void HT1621::set_backlight(bool state) {
+    backlight(state ? (uint8_t)255 : (uint8_t)0);
 }
-
+// Set the backlight brightness level (0-255)
+void HT1621::backlight(uint8_t level) {
+    if (_backlight_en) {
+        // Simple quadratic gamma curve for perceptually linear dimming
+        uint16_t pwm_scaled = ((uint16_t)level * level) / 255; 
+        analogWrite(_backlight_p, (uint8_t)pwm_scaled);
+    }
+}
+//Clear the display and the buffer
 void HT1621::clear() {
     // 1. Clear the hardware display memory (16 addresses: 0x00 through 0x1E)
     wrCLR(16);
@@ -180,16 +160,9 @@ void HT1621::clear() {
     }
 }
 
-// takes the buffer and puts it straight into the driver
-void HT1621::update(){
-	// the buffer is backwards with respect to the lcd. could be improved
-	wrone(0, _buffer[5]);
-	wrone(2, _buffer[4]);
-	wrone(4, _buffer[3]);
-	wrone(6, _buffer[2]);
-	wrone(8, _buffer[1]);
-	wrone(10,_buffer[0]);
-}
+// ==========================================
+//General Prints
+// ==========================================
 
 void HT1621::print(long num, const char* flags, int precision){
 	if(num > 999999) // basic checks
@@ -257,6 +230,44 @@ void HT1621::print(double num, int precision){
 }
 
 
+void HT1621::print(const char* str, bool leftPadded){
+	int chars = strlen(str);
+	int padding = 6 - chars;
+
+	for(int i = 0; i < 6; i++){
+		_buffer[i] &= 0x80; // mask the first bit, used by batter and decimal point
+		char character = leftPadded
+				 		 ? i < padding ? ' ' : str[i - padding]
+				 		 : i >= chars ? ' ' : str[i];
+		_buffer[i] |= charToSegBits(character);
+	}
+
+	setdecimalseparator(0); // Hide decimal point
+	update();
+}
+
+//Sets the battery level on the display. 0=off, 1=1 segment, 2=2 segments, 3=3 segments
+void HT1621::setBatteryLevel(int level) 
+{
+	// zero out the previous (otherwise the or couldn't be possible)
+	_buffer[0] &= 0x7F;
+	_buffer[1] &= 0x7F;
+	_buffer[2] &= 0x7F;
+	switch(level){
+		case 3: // battery on and all 3 segments
+			_buffer[0] |= 0x80;
+		case 2: // battery on and 2 segments
+			_buffer[1] |= 0x80;
+		case 1: // battery on and 1 segment
+			_buffer[2] |= 0x80;
+		case 0: // battery indication off
+		default:
+			break;
+	}
+	update();
+}
+
+//Prints a number in celsius with 1 decimal point precision on the rightmost LCD
 void HT1621::printCelsius(double num){
 	if(num > 9999) // basic checks
 		num = 9999; // clip into 999999
@@ -285,22 +296,7 @@ void HT1621::printCelsius(double num){
 	update();
 }
 
-void HT1621::print(const char* str, bool leftPadded){
-	int chars = strlen(str);
-	int padding = 6 - chars;
-
-	for(int i = 0; i < 6; i++){
-		_buffer[i] &= 0x80; // mask the first bit, used by batter and decimal point
-		char character = leftPadded
-				 		 ? i < padding ? ' ' : str[i - padding]
-				 		 : i >= chars ? ' ' : str[i];
-		_buffer[i] |= charToSegBits(character);
-	}
-
-	setdecimalseparator(0); // Hide decimal point
-	update();
-}
-
+// Dedicated display printing methods
 // ==========================================
 // LEFT DISPLAY (5 Digits) (Addr 30 to 22)
 // ==========================================
@@ -358,6 +354,17 @@ void HT1621::printRight(const char* str) {
     }
 }
 
+//Helper Functions
+//Takes the buffer and puts it straight into the driver
+void HT1621::update(){
+	// the buffer is backwards with respect to the lcd. could be improved
+	wrone(0, _buffer[5]);
+	wrone(2, _buffer[4]);
+	wrone(4, _buffer[3]);
+	wrone(6, _buffer[2]);
+	wrone(8, _buffer[1]);
+	wrone(10,_buffer[0]);
+}
 
 void HT1621::setdecimalseparator(int decimaldigits) {
 	// zero out the eight bit

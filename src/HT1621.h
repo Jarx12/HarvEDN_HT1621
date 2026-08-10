@@ -30,18 +30,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *******************************************************************************/
 
 #ifndef HT1621_H_
-#define HT1621_H_   //防止重复包含
+#define HT1621_H_   //Prevent multiple inclusions of this header file
 
-#define  BIAS     0x52             //0b1000 0101 0010  1/3duty 4com
-#define  SYSDIS   0X00             //0b1000 0000 0000  关振系统荡器和LCD偏压发生器
-#define  SYSEN    0X02             //0b1000 0000 0010 打开系统振荡器
-#define  LCDOFF   0X04             //0b1000 0000 0100  关LCD偏压
-#define  LCDON    0X06             //0b1000 0000 0110  打开LCD偏压
-#define  XTAL     0x28             //0b1000 0010 1000 外部接时钟
-#define  RC256    0X30             //0b1000 0011 0000  内部时钟
-#define  TONEON   0X12             //0b1000 0001 0010  打开声音输出
-#define  TONEOFF  0X10             //0b1000 0001 0000 关闭声音输出
-#define  WDTDIS1  0X0A             //0b1000 0000 1010  禁止看门狗
+#define  BIAS     0x52             //0b1000 0101 0010  Sets the driver Bias to 1/3 Duty Cycle and 4 COM
+#define  SYSDIS   0X00             //0b1000 0000 0000  Turn off system oscillator and LCD bias generator
+#define  SYSEN    0X02             //0b1000 0000 0010 Turn on system oscillator
+#define  LCDOFF   0X04             //0b1000 0000 0100  Turn off LCD bias
+#define  LCDON    0X06             //0b1000 0000 0110  Turn on LCD bias
+#define  XTAL     0x28             //0b1000 0010 1000 External clock input (disabled)
+#define  RC256    0X30             //0b1000 0011 0000  Internal clock (enabled)
+#define  TONEON   0X12             //0b1000 0001 0010  Enable Buzzer output
+#define  TONEOFF  0X10             //0b1000 0001 0000 Disable Buzzer output
+#define  WDTDIS1  0X0A             //0b1000 0000 1010  Disable Watchdog timer
 #define  BUFFERSIZE 32
 
 // #define HT1621_DEBUG
@@ -51,25 +51,24 @@ class  HT1621
 {
 public:
 	HT1621();
+	// Initialization Functions
 	void begin(int cs_p, int wr_p, int data_p, int backlight_p);
 	void begin(int cs_p, int wr_p, int data_p);
 	
+	
+	// Control Functions
+	void display(bool state); // true=on, false=off
+	void set_backlight(bool state); // true=on, false=off
+	void backlight(uint8_t level); // 0-255, 0=min, 255=max
 	void clear();
-	
-	void display();
-	void noDisplay();
-	
-	void backlight();
-	void noBacklight();
-
-	void setBatteryLevel(int level);
 	
 	// General Prints
 	void print(const char* str, bool leftPadded = false);
 	void print(long num, const char* flags="%6li", int precision = 0);
 	void print(double num, int precision = 3);
 	void printCelsius(double num); // precision is always 1
-
+	void setBatteryLevel(int level);
+	
 	// Dedicated display printing methods
     //Left
 	void printLeft(long num);
@@ -82,6 +81,7 @@ public:
     void printRight(const char* str);
 
 private:
+	//Pins and Variables
 	int _cs_p;
 	int _wr_p;
 	int _data_p;
@@ -89,14 +89,16 @@ private:
 	bool _backlight_en;
 	char _buffer[BUFFERSIZE];
 	unsigned char _battery[3];
+	// Initialization Functions
 	void wrone(unsigned char addr, unsigned char sdata);
 	void wrclrdata(unsigned char addr, unsigned char sdata);
 	void wrCLR(unsigned char len);
 	void wrDATA(unsigned char data, unsigned char cnt);
 	void wrCMD(unsigned char CMD);
-	void setdecimalseparator(int dpposition);
-	void config(); // legacy: why not in begin func
+	void config();
+	//Helper Functions
 	void update();
+	void setdecimalseparator(int dpposition);
 	char charToSegBits(char character);
 };
 #endif

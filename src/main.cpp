@@ -9,7 +9,6 @@ const uint8_t WR_PIN   = 5;
 const uint8_t DATA_PIN = 4;
 const uint8_t BLK_PIN  = 8; 
 //const uint8_t TOUCHIO_PIN  = 8; 
-const uint8_t BACKLIGHT_PIN = 8;
 /*const int offsetUTC = -4;
 bool lastState = HIGH;
 uint8_t flag=0;
@@ -134,12 +133,13 @@ void setup() {
   Serial.println(F("===================================="));
 
   // Initialize HT1621 driver
-  lcd.begin(CS_PIN, WR_PIN, DATA_PIN);
+  lcd.begin(CS_PIN, WR_PIN, DATA_PIN, BLK_PIN);
   lcd.clear();
+  lcd.backlight(200); // Set backlight to maximum brightness
   delay(1000);
 }
 
 void loop() {
-  testPanelCounters();
-  delay (150);
+  lcd.printCelsius(-4); // Display a sample temperature value
+  delay(2000);
 }
