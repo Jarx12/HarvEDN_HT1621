@@ -164,7 +164,7 @@ void HT1621::clear() {
 //General Prints
 // ==========================================
 
-void HT1621::print(long num, const char* flags, int precision){
+/*void HT1621::print(long num, const char* flags, int precision){
 	if(num > 999999) // basic checks
 		num = 999999; // clip into 999999
 	if(num < -99999) // basic checks
@@ -244,7 +244,7 @@ void HT1621::print(const char* str, bool leftPadded){
 
 	setDecimalRight(0); // Hide decimal point
 	update();
-}
+}*/
 
 //Sets the battery level on the display. 0=off, 1=1 segment, 2=2 segments, 3=3 segments
 void HT1621::setBatteryLevel(int level) 
@@ -268,7 +268,6 @@ void HT1621::setBatteryLevel(int level)
     update();
 }
 
-
 void HT1621::setMidTriangles(bool up, bool down) {
     // Clear Bit 7 (0x80) on Middle Triangle buffer positions
     _buffer[9] &= 0x7F; // Middle Triangle UP (RAM 0x11)
@@ -291,36 +290,68 @@ void HT1621::setLeftTriangles(bool up, bool down) {
     update();
 }
 
+void HT1621::setDecimalSeparator(LCDSection section, int decimaldigits) {
+    // 3 Decimal Point buffer slots for each LCD section
+    static const uint8_t dp_map[3][3] = {
+        { 0,  1,  2 },   // LCD_RIGHT
+        { 6,  7, 8 },   // LCD_MID
+        { 11, 12, 13 }   // LCD_LEFT
+    };
 
-//Prints a number in celsius with 1 decimal point precision on the rightmost LCD
-void HT1621::printCelsius(double num){
-	if(num > 9999) // basic checks
-		num = 9999; // clip into 999999
-	if(num < -999) // basic checks
-		num = -999; // clip into -99999
+    if (section < LCD_RIGHT || section > LCD_LEFT) return;
 
-	int precision;
-	
-	if(num <= -100 || num >= 999)
-		precision = 0;	// if negative max precision allowed = 0
-	else 
-		precision = 1;	// if positive max precision allowed = 1
+    // Clear Bit 7 (0x80) on all 3 DP positions for the target LCD
+    _buffer[dp_map[section][0]] &= 0x7F;
+    _buffer[dp_map[section][1]] &= 0x7F;
+    _buffer[dp_map[section][2]] &= 0x7F;
 
-	const char* flags = (precision > 0 && abs(num) < 1) ? "%04li*C" : "%4li*C";
-
-	long integerpart;
-	integerpart = ((long)(num*pow(10,precision)));
-
-
-	print(integerpart, flags, precision); // draw the integerized number
-	if(precision > 0)
-		setDecimalRight(precision+2); // draw the decimal point shifted by 2
-	else 	
-		setDecimalRight(0); // or clear the decimal separator
-
-	update();
+    // Set Bit 7 for the chosen decimal position (1, 2, or 3)
+    if (decimaldigits >= 1 && decimaldigits <= 3) {
+        _buffer[dp_map[section][3 - decimaldigits]] |= 0x80;
+    }
+    update();
 }
 
+//Prints a number in celsius with max 1 decimal point, will truncate the number if it is too big to fit in the display. so the effective range is -99 to 999, the right display is used as if it had 5 digits when it has 6, so could be improved
+void HT1621::printCelsius(LCDSection section, double num) {
+    // Clamp range to prevent string overflow
+    if (num > 999.0)  num = 999.0;
+    if (num < -99.0)  num = -99.0;
+
+    // Use 1 decimal place if between -9.9 and 99.9, otherwise 0
+    int precision = (num >= -9.9 && num < 100.0) ? 1 : 0;
+
+    int32_t val;
+    if (precision == 1) {
+        double scaled = num * 10.0;
+        val = (scaled >= 0) ? (int32_t)(scaled + 0.5) : (int32_t)(scaled - 0.5);
+    } else {
+        val = (num >= 0) ? (int32_t)(num + 0.5) : (int32_t)(num - 0.5);
+    }
+
+    char str[8];
+    if (section == LCD_RIGHT) {
+        // 6-Digit LCD: " 317*C" (1 leading space shifts digits onto DP-capable buffer slots)
+        snprintf(str, sizeof(str), "%4ld*C", (long)val);
+    } else {
+        // 5-Digit LCDs (Left & Mid): "317*C"
+        snprintf(str, sizeof(str), "%3ld*C", (long)val);
+    }
+
+    // Write formatted string to screen
+    switch (section) {
+        case LCD_LEFT:  printLeft(str);  break;
+        case LCD_MID:   printMid(str);   break;
+        case LCD_RIGHT: printRight(str); break;
+    }
+
+    // Turn on the 1st decimal point for 1-decimal numbers, or clear it
+    if (precision == 1) {
+        setDecimalSeparator(section, 1);
+    } else {
+        setDecimalSeparator(section, 0);
+    }
+}
 // Dedicated display printing methods
 // ==========================================
 // LEFT DISPLAY (5 Digits)
@@ -386,6 +417,46 @@ void HT1621::printRight(const char* str) {
     update();
 }
 
+void HT1621::printNum(LCDSection section, double num, int precision) {
+    // 1. Clamp precision to valid range (0 to 3 decimal places)
+    if (precision < 0) precision = 0;
+    if (precision > 3) precision = 3;
+
+    // Standard multipliers (fast integer math, no pow() bloat)
+    static const int32_t mult[] = { 1, 10, 100, 1000 };
+
+    // 2. Scale number to integer with rounding
+    double scaled = num * mult[precision];
+    int32_t val = (scaled >= 0) ? (int32_t)(scaled + 0.5) : (int32_t)(scaled - 0.5);
+
+    // 3. Determine digit count and clamp limits based on display capacity
+    int maxDigits = (section == LCD_RIGHT) ? 6 : 5;
+    int32_t maxVal = (maxDigits == 6) ? 999999 : 99999;
+    int32_t minVal = (maxDigits == 6) ? -99999 : -9999;
+
+    if (val > maxVal) val = maxVal;
+    if (val < minVal) val = minVal;
+
+    // 4. Format integer with right alignment into local string buffer
+    char str[7];
+    if (maxDigits == 6) {
+        snprintf(str, sizeof(str), "%6ld", (long)val);
+    } else {
+        snprintf(str, sizeof(str), "%5ld", (long)val);
+    }
+
+    // 5. Send formatted digits to the selected LCD section
+    switch (section) {
+        case LCD_LEFT:  printLeft(str);  break;
+        case LCD_MID:   printMid(str);   break;
+        case LCD_RIGHT: printRight(str); break;
+    }
+
+    // 6. Draw decimal separator
+    setDecimalSeparator(section, precision);
+}
+
+
 //Helper Functions
 //Takes the buffer and puts it straight into the driver
 void HT1621::update() {
@@ -394,51 +465,10 @@ void HT1621::update() {
     }
 }
 
-/*void HT1621::setdecimalseparator(int decimaldigits) {
-    // Clear Bit 7 (0x80) on the 3 decimal point buffer positions (0, 1, 2)
-    _buffer[0] &= 0x7F;
-    _buffer[1] &= 0x7F;
-    _buffer[2] &= 0x7F;
-
-    if (decimaldigits <= 0 || decimaldigits > 3) {
-        update();
-        return;
-    }
-
-    // Map 1, 2, or 3 decimal digits to buffer indices 0, 1, or 2
-    _buffer[3 - decimaldigits] |= 0x80;
-
-    update();
-}*/
-
-void HT1621::setDecimalSeparator(LCDSection section, int decimaldigits) {
-    // 3 Decimal Point buffer slots for each LCD section
-    static const uint8_t dp_map[3][3] = {
-        { 0,  1,  2 },   // LCD_RIGHT
-        { 6,  7, 8 },   // LCD_MID
-        { 11, 12, 13 }   // LCD_LEFT
-    };
-
-    if (section < LCD_RIGHT || section > LCD_LEFT) return;
-
-    // Clear Bit 7 (0x80) on all 3 DP positions for the target LCD
-    _buffer[dp_map[section][0]] &= 0x7F;
-    _buffer[dp_map[section][1]] &= 0x7F;
-    _buffer[dp_map[section][2]] &= 0x7F;
-
-    // Set Bit 7 for the chosen decimal position (1, 2, or 3)
-    if (decimaldigits >= 1 && decimaldigits <= 3) {
-        _buffer[dp_map[section][3 - decimaldigits]] |= 0x80;
-    }
-    update();
-}
-
-
-
-
 char HT1621::charToSegBits(char character) {
 	switch (character) {
 	case '*': // For degree for now
+	case '°': 
 		return 0b0110011;
 	case '|':
 		return 0b0000101;
@@ -473,7 +503,7 @@ char HT1621::charToSegBits(char character) {
 	case 'B':
 		return 0b1001111;
 	case 'c':
-	//	return 0b0001110;
+		return 0b01101001;
 	case 'C':
 		return 0b0011101;
 	case 'd':

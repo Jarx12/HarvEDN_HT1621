@@ -69,13 +69,20 @@ public:
 	void clear();
 	
 	// General Prints
-	void print(const char* str, bool leftPadded = false);
-	void print(long num, const char* flags="%6li", int precision = 0);
-	void print(double num, int precision = 3);
-	void printCelsius(double num); // precision is always 1
+	//void print(const char* str, bool leftPadded = false);
+	//void print(long num, const char* flags="%6li", int precision = 0);
+	//void print(double num, int precision = 3);
+	void printCelsius(LCDSection section, double num);
+		void printCelsiusLeft(double num)  { printCelsius(LCD_LEFT, num); }
+		void printCelsiusMid(double num)   { printCelsius(LCD_MID, num); }
+		void printCelsiusRight(double num) { printCelsius(LCD_RIGHT, num); }
 	void setBatteryLevel(int level);
 	void setMidTriangles(bool top, bool down); //Control the triangle indicators on the middle display. 
 	void setLeftTriangles(bool top, bool down);
+	void setDecimalSeparator(LCDSection section, int dpposition);
+		void setDecimalRight(int dpposition) { setDecimalSeparator(LCD_RIGHT, dpposition); }
+		void setDecimalMid(int dpposition)   { setDecimalSeparator(LCD_MID, dpposition); }
+		void setDecimalLeft(int dpposition)  { setDecimalSeparator(LCD_LEFT, dpposition); }
 	// Dedicated display printing methods
     //Left
 	void printLeft(long num);
@@ -86,12 +93,10 @@ public:
 	//Right
     void printRight(long num);
     void printRight(const char* str);
-	
-	void setDecimalSeparator(LCDSection section, int dpposition);
+	//General number printing with precision
+	void printNum(LCDSection section, double num, int precision);
+		void printNum(double num, int precision) { printNum(LCD_RIGHT, num, precision); } // default to printNum(LCD_RIGHT, num, precision) if section is not specified
 
-	void setDecimalRight(int dpposition) { setDecimalSeparator(LCD_RIGHT, dpposition); }
-    void setDecimalMid(int dpposition)   { setDecimalSeparator(LCD_MID, dpposition); }
-    void setDecimalLeft(int dpposition)  { setDecimalSeparator(LCD_LEFT, dpposition); }
 
 
 
@@ -113,7 +118,6 @@ private:
 	void config();
 	//Helper Functions
 	void update();
-	
 	char charToSegBits(char character);
 };
 #endif

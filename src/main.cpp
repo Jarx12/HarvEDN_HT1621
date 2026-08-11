@@ -28,16 +28,10 @@ void setup() {
     // TEST 1: Section Specific Printing
     // -------------------------------------------------------------
     Serial.println("Testing Left (5-digit), Mid (5-digit), Right (6-digit)...");
-    while (true)
-    {
-      for (int i = 0; i < 4; i++) {
-      lcd.printRight(i);  // Left Display  
-      lcd.setDecimalRight(i);
-      lcd.setDecimalMid(i);
-      lcd.setDecimalLeft(i);
-      delay(500);
-    }
-    }
+    lcd.printCelsiusLeft(25.4); // Left Display with 1 decimal place
+    lcd.printCelsiusMid(37.1);   // Mid Display with 1 decimal place
+    lcd.printCelsiusRight(32); // Right Display with 1 decimal place
+    delay(500);
     // Clear screen before starting loop counter
     //lcd.clear();
 }
