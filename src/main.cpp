@@ -14,28 +14,54 @@ uint8_t current_bit = 0;
 
 void setup() {
     Serial.begin(115200);
-    
-    // 1. Initialize LCD pins
     lcd.begin(CS_PIN, WR_PIN, DATA_PIN, BLK_PIN);
-    lcd.backlight(200);
-    // 2. Wipe hardware and local buffer
     lcd.clear();
-    delay(500);
-
-    Serial.println("--- Starting HT1621 Display Test ---");
-
-    // -------------------------------------------------------------
-    // TEST 1: Section Specific Printing
-    // -------------------------------------------------------------
-    Serial.println("Testing Left (5-digit), Mid (5-digit), Right (6-digit)...");
-    lcd.printCelsiusLeft(25.4); // Left Display with 1 decimal place
-    lcd.printCelsiusMid(37.1);   // Mid Display with 1 decimal place
-    lcd.printCelsiusRight(32); // Right Display with 1 decimal place
-    delay(500);
-    // Clear screen before starting loop counter
-    //lcd.clear();
+    lcd.backlight(200); //Set the Backlight to 200/255
+    delay(120);
 }
 
 void loop() {
+    // -------------------------------------------------------------
+    // Test 1: Precision Sweep on Left LCD (25.3 at different precisions)
+    // -------------------------------------------------------------
+    lcd.printNum(LCD_LEFT, 25.3, 1);   // Should show: "  25.3"
+    lcd.printNum(LCD_MID, 123.4, 1);    // Should show: " 123.4"
+    lcd.printNum(LCD_RIGHT, 99.9, 1);   // Should show: "   99.9"
+    delay(2000);
 
+    lcd.printNum(LCD_LEFT, 25.32, 2);  // Should show: " 25.32"
+    lcd.printNum(LCD_MID, 12.34, 2);   // Should show: " 12.34"
+    delay(2000);
+
+    lcd.printNum(LCD_LEFT, 25.32, 3);  // Should show: "25.320"
+    delay(2000);
+
+    // -------------------------------------------------------------
+    // Test 2: Negative Numbers & Integers
+    // -------------------------------------------------------------
+    lcd.printNum(LCD_LEFT, -5.2, 1);   // Should show: "  -5.2"
+    lcd.printNum(LCD_MID, -128, 0);    // Should show: " -128"
+    lcd.printNum(LCD_RIGHT, -1234, 0); // Should show: " -1234"
+    delay(2000);
+
+    // -------------------------------------------------------------
+    // Test 3: Temperature Readings
+    // -------------------------------------------------------------
+    lcd.printCelsiusLeft(31.7);         // Should show: " 31.7°C"
+    lcd.printCelsiusMid(-4.5);          // Should show: " -4.5°C"
+    lcd.printCelsiusRight(105.0);       // Should show: "  105°C"
+    delay(2000);
+
+    // -------------------------------------------------------------
+    // Test 4: Cycle Battery Level (0 to 3) & Triangles
+    // -------------------------------------------------------------
+    for (int b = 0; b <= 3; b++) {
+        lcd.setBatteryLevel(b);
+        
+        // Alternate triangles
+        lcd.setLeftTriangles(b % 2 == 1, b % 2 == 0);
+        lcd.setMidTriangles(b % 2 == 0, b % 2 == 1);
+        
+        delay(800);
+    }
 }

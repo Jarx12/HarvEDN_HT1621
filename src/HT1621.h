@@ -1,6 +1,7 @@
 /*******************************************************************************
 Copyright 2016-2018 anxzhu (github.com/anxzhu)
 Copyright 2018-2020 Valerio Nappi (github.com/valerionew) (changes)
+Copyright 2025-2026 Juan Ruiz (github.com/jarx12) (changes)
 Based on segment-lcd-with-ht1621 from anxzhu (2016-2018)
 (https://github.com/anxzhu/segment-lcd-with-ht1621)
 

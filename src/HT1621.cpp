@@ -1,6 +1,7 @@
 /*******************************************************************************
 Copyright 2016-2018 anxzhu (github.com/anxzhu)
 Copyright 2018-2020 Valerio Nappi (github.com/5N44P) (changes)
+Copyright 2025-2026 Juan Ruiz (github.com/jarx12) (changes)
 Based on segment-lcd-with-ht1621 from anxzhu (2016-2018)
 (https://github.com/anxzhu/segment-lcd-with-ht1621)
 
@@ -163,88 +164,6 @@ void HT1621::clear() {
 // ==========================================
 //General Prints
 // ==========================================
-
-/*void HT1621::print(long num, const char* flags, int precision){
-	if(num > 999999) // basic checks
-		num = 999999; // clip into 999999
-	if(num < -99999) // basic checks
-		num = -99999; // clip into -99999
-
-	char localbuffer[7]; //buffer to work within the function
-	snprintf(localbuffer, 7, flags, num); // convert the decimal into string
-	#ifdef _HTDEBUG
-		Serial.begin(9600);
-		Serial.print(localbuffer);
-		Serial.print("\t");
-	#endif
-
-	// horrible handling but should get us working. needs refactor in next major
-	if (precision > 0 && (num) < pow(10, precision)) {
-		// we remove extra leading zeros
-		for (int i = 0; i < (5 - precision); i++) {
-			#ifdef _HTDEBUG
-				Serial.print(localbuffer[1]);
-			#endif // _HTDEBUG
-			if(localbuffer[i+1] == '0' && localbuffer[i] != '-'){ // we remove only if there is another zero ahead AND if it's not a minus sign
-				localbuffer[i] = ' ';
-			}
-			else{
-				break;
-			} 
-			#ifdef _HTDEBUG
-				Serial.println();buffer[1]);
-			#endif // _HTDEBUG
-	}
-	}
-
-
-	for(int i=0; i<6; i++){
-		_buffer[i] &= 0x80; // mask the first bit, used by batter and decimal point
-		_buffer[i] |= charToSegBits(localbuffer[i]);
-	}
-	update();
-}
-
-void HT1621::print(double num, int precision){
-	if(num > 999999) // basic checks
-		num = 999999; // clip into 999999
-	if(num < -99999) // basic checks
-		num = -99999; // clip into -99999
-
-	if(precision > 3 && num > 0)
-		precision = 3; // if positive max precision allowed = 3
-	else if(precision > 2 && num < 0)
-		precision = 2;// if negative max precision allowed = 2
-	if(precision < 0)
-		precision = 0; // negative precision?!
-
-	const char* flags = (precision > 0 && abs(num) < 1) ? "%06li" : "%6li";
-
-	long integerpart;
-	integerpart = ((long)(num*pow(10,precision)));
-
-	print(integerpart, flags, precision); // draw the integerized number
-	setDecimalRight(precision); // draw the decimal point
-
-	update();
-}
-
-
-void HT1621::print(const char* str, bool leftPadded){
-	int chars = strlen(str);
-	int padding = 6 - chars;
-
-	for(int i = 0; i < 6; i++){
-		_buffer[i] &= 0x80; // mask the first bit, used by batter and decimal point
-		char character = leftPadded
-				 		 ? i < padding ? ' ' : str[i - padding]
-				 		 : i >= chars ? ' ' : str[i];
-		_buffer[i] |= charToSegBits(character);
-	}
-
-	setDecimalRight(0); // Hide decimal point
-	update();
-}*/
 
 //Sets the battery level on the display. 0=off, 1=1 segment, 2=2 segments, 3=3 segments
 void HT1621::setBatteryLevel(int level) 
@@ -417,7 +336,7 @@ void HT1621::printRight(const char* str) {
     update();
 }
 
-void HT1621::printNum(LCDSection section, double num, int precision) {
+/*void HT1621::printNum(LCDSection section, double num, int precision) {
     // 1. Clamp precision to valid range (0 to 3 decimal places)
     if (precision < 0) precision = 0;
     if (precision > 3) precision = 3;
@@ -454,6 +373,45 @@ void HT1621::printNum(LCDSection section, double num, int precision) {
 
     // 6. Draw decimal separator
     setDecimalSeparator(section, precision);
+}*/
+void HT1621::printNum(LCDSection section, double num, int precision) {
+    if (precision < 0) precision = 0;
+    if (precision > 3) precision = 3;
+
+    static const int32_t mult[] = { 1, 10, 100, 1000 };
+
+    double scaled = num * mult[precision];
+    int32_t val = (scaled >= 0) ? (int32_t)(scaled + 0.5) : (int32_t)(scaled - 0.5);
+
+    int maxDigits = (section == LCD_RIGHT) ? 6 : 5;
+    int32_t maxVal = (maxDigits == 6) ? 999999 : 99999;
+    int32_t minVal = (maxDigits == 6) ? -99999 : -9999;
+
+    if (val > maxVal) val = maxVal;
+    if (val < minVal) val = minVal;
+
+    // Format right-aligned across full section width
+    char str[8];
+    if (maxDigits == 6) {
+        snprintf(str, sizeof(str), "%6ld", (long)val);
+    } else {
+        snprintf(str, sizeof(str), "%5ld", (long)val);
+    }
+
+    // Print string to selected section
+    switch (section) {
+        case LCD_LEFT:  printLeft(str);  break;
+        case LCD_MID:   printMid(str);   break;
+        case LCD_RIGHT: printRight(str); break;
+    }
+
+    // Calculate DP position based on right-aligned ones digit
+    if (precision > 0) {
+        int dp_pos = (maxDigits == 6) ? (4 - precision) : (4 - precision);
+        setDecimalSeparator(section, dp_pos);
+    } else {
+        setDecimalSeparator(section, 0); // Clear DP
+    }
 }
 
 
