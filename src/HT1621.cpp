@@ -33,7 +33,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "HT1621.h"
 
 //Constructor
-HT1621::HT1621() {
+HT1621::HT1621() 
+{
     memset(_buffer, 0x00, sizeof(_buffer));
 }
 
@@ -153,7 +154,6 @@ void HT1621::backlight(uint8_t level) {
 void HT1621::clear() {
     // 1. Clear the hardware display memory (16 addresses: 0x00 through 0x1E)
     wrCLR(16);
-
     // 2. Clear the local display buffer
     for (uint8_t i = 0; i < BUFFERSIZE; i++) {
         _buffer[i] = 0x00;
@@ -224,7 +224,7 @@ void HT1621::print(double num, int precision){
 	integerpart = ((long)(num*pow(10,precision)));
 
 	print(integerpart, flags, precision); // draw the integerized number
-	setdecimalseparator(precision); // draw the decimal point
+	setDecimalRight(precision); // draw the decimal point
 
 	update();
 }
@@ -242,30 +242,55 @@ void HT1621::print(const char* str, bool leftPadded){
 		_buffer[i] |= charToSegBits(character);
 	}
 
-	setdecimalseparator(0); // Hide decimal point
+	setDecimalRight(0); // Hide decimal point
 	update();
 }
 
 //Sets the battery level on the display. 0=off, 1=1 segment, 2=2 segments, 3=3 segments
 void HT1621::setBatteryLevel(int level) 
 {
-	// zero out the previous (otherwise the or couldn't be possible)
-	_buffer[0] &= 0x7F;
-	_buffer[1] &= 0x7F;
-	_buffer[2] &= 0x7F;
-	switch(level){
-		case 3: // battery on and all 3 segments
-			_buffer[0] |= 0x80;
-		case 2: // battery on and 2 segments
-			_buffer[1] |= 0x80;
-		case 1: // battery on and 1 segment
-			_buffer[2] |= 0x80;
-		case 0: // battery indication off
-		default:
-			break;
-	}
-	update();
+    // Clear Bit 7 (0x80) on the 3 battery buffer positions
+    _buffer[3] &= 0x7F; // Battery bar 1
+    _buffer[4] &= 0x7F; // Battery bar 2
+    _buffer[5] &= 0x7F; // Battery bar 3
+
+    switch(level) {
+        case 3: // Battery on + all 3 segments
+            _buffer[5] |= 0x80;
+        case 2: // Battery on + 2 segments
+            _buffer[4] |= 0x80;
+        case 1: // Battery on + 1 segment
+            _buffer[3] |= 0x80;
+        case 0: // Battery off
+        default:
+            break;
+    }
+    update();
 }
+
+
+void HT1621::setMidTriangles(bool up, bool down) {
+    // Clear Bit 7 (0x80) on Middle Triangle buffer positions
+    _buffer[9] &= 0x7F; // Middle Triangle UP (RAM 0x11)
+    _buffer[10] &= 0x7F; // Middle Triangle DOWN (RAM 0x13)
+
+    if (up)   _buffer[9] |= 0x80;
+    if (down) _buffer[10] |= 0x80;
+
+    update();
+}
+
+void HT1621::setLeftTriangles(bool up, bool down) {
+    // Clear Bit 7 (0x80) on Left Triangle buffer positions
+    _buffer[14] &= 0x7F; // Left Triangle UP (RAM 0x1D)
+    _buffer[15] &= 0x7F; // Left Triangle DOWN (RAM 0x1F)
+
+    if (up)   _buffer[14] |= 0x80;
+    if (down) _buffer[15] |= 0x80;
+
+    update();
+}
+
 
 //Prints a number in celsius with 1 decimal point precision on the rightmost LCD
 void HT1621::printCelsius(double num){
@@ -289,16 +314,16 @@ void HT1621::printCelsius(double num){
 
 	print(integerpart, flags, precision); // draw the integerized number
 	if(precision > 0)
-		setdecimalseparator(precision+2); // draw the decimal point shifted by 2
+		setDecimalRight(precision+2); // draw the decimal point shifted by 2
 	else 	
-		setdecimalseparator(0); // or clear the decimal separator
+		setDecimalRight(0); // or clear the decimal separator
 
 	update();
 }
 
 // Dedicated display printing methods
 // ==========================================
-// LEFT DISPLAY (5 Digits) (Addr 30 to 22)
+// LEFT DISPLAY (5 Digits)
 // ==========================================
 void HT1621::printLeft(long num) {
     char buf[6];
@@ -306,18 +331,21 @@ void HT1621::printLeft(long num) {
     printLeft(buf);
 }
 
+// Update Leftmost Display (5 Digits)
 void HT1621::printLeft(const char* str) {
-    static const uint8_t left_addrs[5] = { 30, 28, 26, 24, 22 };
+    static const uint8_t left_map[5] = { 15, 14, 13, 12, 11 };
     int len = strlen(str);
+
     for (int i = 0; i < 5; i++) {
         char c = (i < len) ? str[i] : ' ';
         uint8_t segs = charToSegBits(c);
-        wrone(left_addrs[i], segs);
+        _buffer[left_map[i]] = (_buffer[left_map[i]] & 0x80) | (segs & 0x7F);
     }
+    update();
 }
 
 // ==========================================
-// MIDDLE DISPLAY (5 Digits) (Addr 20 to 12)
+// MIDDLE DISPLAY (5 Digits)
 // ==========================================
 void HT1621::printMid(long num) {
     char buf[6];
@@ -326,17 +354,19 @@ void HT1621::printMid(long num) {
 }
 
 void HT1621::printMid(const char* str) {
-    static const uint8_t mid_addrs[5] = { 20, 18, 16, 14, 12 };
+    static const uint8_t mid_map[5] = { 10, 9, 8, 7, 6 };
     int len = strlen(str);
+
     for (int i = 0; i < 5; i++) {
         char c = (i < len) ? str[i] : ' ';
         uint8_t segs = charToSegBits(c);
-        wrone(mid_addrs[i], segs);
+        _buffer[mid_map[i]] = (_buffer[mid_map[i]] & 0x80) | (segs & 0x7F);
     }
+    update();
 }
 
 // ==========================================
-// RIGHT DISPLAY (6 Digits) (Addr 10 to 0)
+// RIGHT DISPLAY (6 Digits)
 // ==========================================
 void HT1621::printRight(long num) {
     char buf[7];
@@ -345,42 +375,66 @@ void HT1621::printRight(long num) {
 }
 
 void HT1621::printRight(const char* str) {
-    static const uint8_t right_addrs[6] = { 10, 8, 6, 4, 2, 0 };
+    static const uint8_t right_map[6] = { 5, 4, 3, 2, 1, 0 };
     int len = strlen(str);
+
     for (int i = 0; i < 6; i++) {
         char c = (i < len) ? str[i] : ' ';
         uint8_t segs = charToSegBits(c);
-        wrone(right_addrs[i], segs);
+        _buffer[right_map[i]] = (_buffer[right_map[i]] & 0x80) | (segs & 0x7F);
     }
+    update();
 }
 
 //Helper Functions
 //Takes the buffer and puts it straight into the driver
-void HT1621::update(){
-	// the buffer is backwards with respect to the lcd. could be improved
-	wrone(0, _buffer[5]);
-	wrone(2, _buffer[4]);
-	wrone(4, _buffer[3]);
-	wrone(6, _buffer[2]);
-	wrone(8, _buffer[1]);
-	wrone(10,_buffer[0]);
+void HT1621::update() {
+    for (uint8_t i = 0; i < BUFFERSIZE; i++) {
+        wrone(i * 2, _buffer[i]);
+    }
 }
 
-void HT1621::setdecimalseparator(int decimaldigits) {
-	// zero out the eight bit
-	_buffer[3] &= 0x7F;
-	_buffer[4] &= 0x7F;
-	_buffer[5] &= 0x7F;
+/*void HT1621::setdecimalseparator(int decimaldigits) {
+    // Clear Bit 7 (0x80) on the 3 decimal point buffer positions (0, 1, 2)
+    _buffer[0] &= 0x7F;
+    _buffer[1] &= 0x7F;
+    _buffer[2] &= 0x7F;
 
-	if( decimaldigits <= 0 || decimaldigits > 3){
-		return;
-	}
+    if (decimaldigits <= 0 || decimaldigits > 3) {
+        update();
+        return;
+    }
 
-	// 3 is the digit offset
-	// the first three eights bits in the buffer are for the battery signs
-	// the last three are for the decimal point
-	_buffer[6-decimaldigits] |= 0x80;
+    // Map 1, 2, or 3 decimal digits to buffer indices 0, 1, or 2
+    _buffer[3 - decimaldigits] |= 0x80;
+
+    update();
+}*/
+
+void HT1621::setDecimalSeparator(LCDSection section, int decimaldigits) {
+    // 3 Decimal Point buffer slots for each LCD section
+    static const uint8_t dp_map[3][3] = {
+        { 0,  1,  2 },   // LCD_RIGHT
+        { 6,  7, 8 },   // LCD_MID
+        { 11, 12, 13 }   // LCD_LEFT
+    };
+
+    if (section < LCD_RIGHT || section > LCD_LEFT) return;
+
+    // Clear Bit 7 (0x80) on all 3 DP positions for the target LCD
+    _buffer[dp_map[section][0]] &= 0x7F;
+    _buffer[dp_map[section][1]] &= 0x7F;
+    _buffer[dp_map[section][2]] &= 0x7F;
+
+    // Set Bit 7 for the chosen decimal position (1, 2, or 3)
+    if (decimaldigits >= 1 && decimaldigits <= 3) {
+        _buffer[dp_map[section][3 - decimaldigits]] |= 0x80;
+    }
+    update();
 }
+
+
+
 
 char HT1621::charToSegBits(char character) {
 	switch (character) {

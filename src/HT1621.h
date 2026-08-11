@@ -42,10 +42,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define  TONEON   0X12             //0b1000 0001 0010  Enable Buzzer output
 #define  TONEOFF  0X10             //0b1000 0001 0000 Disable Buzzer output
 #define  WDTDIS1  0X0A             //0b1000 0000 1010  Disable Watchdog timer
-#define  BUFFERSIZE 32
+#define  BUFFERSIZE 16
+
 
 // #define HT1621_DEBUG
 
+enum LCDSection {
+    LCD_RIGHT = 0,
+    LCD_MID   = 1,
+    LCD_LEFT  = 2
+};
 
 class  HT1621
 {
@@ -68,7 +74,8 @@ public:
 	void print(double num, int precision = 3);
 	void printCelsius(double num); // precision is always 1
 	void setBatteryLevel(int level);
-	
+	void setMidTriangles(bool top, bool down); //Control the triangle indicators on the middle display. 
+	void setLeftTriangles(bool top, bool down);
 	// Dedicated display printing methods
     //Left
 	void printLeft(long num);
@@ -79,6 +86,14 @@ public:
 	//Right
     void printRight(long num);
     void printRight(const char* str);
+	
+	void setDecimalSeparator(LCDSection section, int dpposition);
+
+	void setDecimalRight(int dpposition) { setDecimalSeparator(LCD_RIGHT, dpposition); }
+    void setDecimalMid(int dpposition)   { setDecimalSeparator(LCD_MID, dpposition); }
+    void setDecimalLeft(int dpposition)  { setDecimalSeparator(LCD_LEFT, dpposition); }
+
+
 
 private:
 	//Pins and Variables
@@ -98,7 +113,7 @@ private:
 	void config();
 	//Helper Functions
 	void update();
-	void setdecimalseparator(int dpposition);
+	
 	char charToSegBits(char character);
 };
 #endif
